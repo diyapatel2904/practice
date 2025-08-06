@@ -11,6 +11,8 @@ from functools import partial
 from skopt import space
 from skopt import gp_minimize
 from hyperopt import hp, fmin, tpe, Trials
+from hyperopt.pyll.base import scope
+import optuna
 
 
 # if __name__ == "__main__":
@@ -19,7 +21,7 @@ from hyperopt import hp, fmin, tpe, Trials
 #     y = df.price_range.values
 
 # ---------------------------------------------------
-#    
+  
 # # GRID SEACHCV
 
 #     param_grid = {
@@ -148,19 +150,80 @@ from hyperopt import hp, fmin, tpe, Trials
 # ------------------------------------------------------------------------
 
 
-def optimize(params,param_names,x,y):
+# def optimize(params,param_names,x,y):
     
+#     classifier = ensemble.RandomForestClassifier(n_jobs=-1)  
+
+#     model = model_selection.RandomizedSearchCV(
+#         estimator=classifier,
+#         n_iter=1,  # Only 1 because we are passing fixed values each time via gp_minimize
+#         cv=5,
+#         scoring="accuracy",
+#         n_jobs=-1,
+#         verbose=0
+#     )
+
+#     kf = model_selection.StratifiedKFold(n_splits=5)
+#     accuracies=[]
+
+#     for train_idx, test_idx in kf.split(X=x, y=y):
+#         xtrain = x[train_idx]
+#         ytrain = y[train_idx]
+
+#         xtest = x[test_idx]
+#         ytest = y[test_idx]
+
+#         model.fit(xtrain, ytrain)
+#         preds = model.predict(xtest)
+#         fold_acc = metrics.accuracy_score(ytest, preds)
+#         accuracies.append(fold_acc)
+
+#     return -1.0*np.mean(accuracies)
+
+# if __name__ == "__main__":
+#     df= pd.read_csv("/home/diya/practice/Dataset/mobile_price_train.csv")
+#     X = df.drop("price_range",axis=1).values
+#     y = df.price_range.values
+
+#     param_space = {
+#         "max_depth": scope.int(hp.quniform("max_depth",3,15,1)),
+#         "n_estimators": scope.int(hp.quniform("n_estimators",100,600,1)),
+#         "criterion": hp.choice("criterion",["gini","entropy"]),
+#         "max_features": hp.quniform("max_features",0.01,1)
+#     }
+
+#     param_names = [ "max_depth", "n_estimators", "criterion", "max_features" ]
+
+#     optimization_function = partial(optimize, x=X, y=y)
+
+#     result = gp_minimize (
+#         optimization_function,
+#         dimensions=param_space,
+#         n_calls=15,
+#         n_random_starts=10,
+#         verbose=10,
+
+#     )
+
+
+# print(dict(zip(param_names, result.x)))
+
+# -----------------------OPTUNA--------------------------------------------------
+
+
+def optimize(trail,x,y):
+    entropy = trail.suggest_categorical("criterion",["gini","entropy"])
+    n_estimators = trail.suggest_int("n_estimators",100,1500)
+    max_depth = trail.suggest_int("max_depth",3,15)
+    max_features = trail.suggest_uniform("max_features",0.01,0.1)
+
     classifier = ensemble.RandomForestClassifier(n_jobs=-1)  
-
     model = model_selection.RandomizedSearchCV(
-        estimator=classifier,
-        n_iter=1,  # Only 1 because we are passing fixed values each time via gp_minimize
-        cv=5,
-        scoring="accuracy",
-        n_jobs=-1,
-        verbose=0
-    )
-
+          n_estimator=n_estimators,
+          max_depth=max_depth,
+          max_features=max_features,
+          criterion=criterion,
+          )
     kf = model_selection.StratifiedKFold(n_splits=5)
     accuracies=[]
 
@@ -182,28 +245,9 @@ if __name__ == "__main__":
     df= pd.read_csv("/home/diya/practice/Dataset/mobile_price_train.csv")
     X = df.drop("price_range",axis=1).values
     y = df.price_range.values
+    optimization_function = partial(optimize,x=X,y=y)
 
-    param_space = [
+    study = optuna.create_study(direction="minimize")
+    study.optimize(optimization_function,n_trails=15)
 
-        "max_depth":hp.quniform("max_depth",3,15,1),
-        "n_estimators":hp.quniform("n_estimators",100,600,1),
-        "criterion": hp.choice("criterion","gini","entropy"),
-        "max_features": hp.quniform("max_features",0.01,1)
-    ]
-
-    param_names = [ "max_depth", "n_estimators", "criterion", "max_features" ]
-
-    optimization_function = partial(optimize, x=X, y=y)
-
-    result = gp_minimize (
-        optimization_function,
-        dimensions=param_space,
-        n_calls=15,
-        n_random_starts=10,
-        verbose=10,
-
-    )
-
-
-print(dict(zip(param_names, result.x)))
 
